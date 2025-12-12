@@ -2,7 +2,7 @@
   "name": "poe-goblin",
   "version": "0.1.0",
   "description": "PoE Trade Tool with Japanese support",
-  "main": "src/main.js",
+  "main": "src/main/main.js",
   "type": "module",
   "scripts": {
     "start": "electron .",

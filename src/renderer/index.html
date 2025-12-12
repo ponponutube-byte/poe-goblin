@@ -64,10 +64,12 @@
   <script>
     // Electronのバージョンを表示
     if (window.electronAPI) {
-      document.getElementById('version').textContent =
-        `Electron v${window.electronAPI.version}`;
+      setTimeout(() => {
+        document.getElementById("version").textContent = `Electron v${window.electronAPI.version}`;
+      }, 5000);
     }
-    console.log('Renderer process loaded');
+    console.log("Renderer process loaded");
   </script>
 </body>
+
 </html>
