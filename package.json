@@ -1,0 +1,22 @@
+{
+  "name": "poe-goblin",
+  "version": "0.1.0",
+  "description": "PoE Trade Tool with Japanese support",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "dev": "nodemon --exec electron . --watch src --ext js,html,css"
+  },
+  "keywords": [
+    "poe",
+    "trade",
+    "electron"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "nodemon": "^3.1.11"
+  }
+}
