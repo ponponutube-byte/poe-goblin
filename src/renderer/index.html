@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoE Goblin - Trade Tool</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Consolas', 'Courier New', monospace;
+      background: rgba(0, 0, 0, 0.85);
+      color: #ffffff;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ヘッダー（ドラッグ可能） */
+    .header {
+      -webkit-app-region: drag;
+      background: rgba(20, 20, 30, 0.95);
+      padding: 8px 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(100, 100, 150, 0.3);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #8b5cf6;
+    }
+
+    .hotkey-display {
+      font-size: 11px;
+      color: #9ca3af;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 3px 8px;
+      border-radius: 3px;
+    }
+
+    /* ボタン */
+    .btn {
+      -webkit-app-region: no-drag;
+      background: rgba(139, 92, 246, 0.2);
+      border: 1px solid rgba(139, 92, 246, 0.5);
+      color: #c4b5fd;
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: rgba(139, 92, 246, 0.3);
+      border-color: rgba(139, 92, 246, 0.7);
+    }
+
+    .btn-close {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
+    }
+
+    .btn-close:hover {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: rgba(239, 68, 68, 0.7);
+    }
+
+    /* メインコンテンツ */
+    .content {
+      flex: 1;
+      padding: 15px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* アイテム情報 */
+    .item-info {
+      background: rgba(30, 30, 45, 0.95);
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    .item-icon {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+      border-radius: 4px;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    .item-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .item-name {
+      font-size: 16px;
+      font-weight: bold;
+      color: #8b5cf6;
+      margin-bottom: 5px;
+      word-wrap: break-word;
+    }
+
+    .item-meta {
+      font-size: 11px;
+      color: #9ca3af;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    /* 価格履歴 */
+    .history-container {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .history-title {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+      padding-left: 5px;
+    }
+
+    .history-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+    }
+
+    .history-item {
+      background: rgba(30, 30, 45, 0.95);
+      padding: 12px 15px;
+      border-radius: 4px;
+      border: 1px solid rgba(100, 100, 150, 0.2);
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    .history-item:hover {
+      background: rgba(40, 40, 55, 0.95);
+      border-color: rgba(139, 92, 246, 0.4);
+    }
+
+    .history-item-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .history-item-index {
+      color: #8b5cf6;
+      font-weight: bold;
+      font-size: 14px;
+      min-width: 30px;
+    }
+
+    .history-item-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .history-item-date {
+      color: #9ca3af;
+      font-size: 10px;
+    }
+
+    .history-item-quantity {
+      color: #60a5fa;
+      font-size: 10px;
+    }
+
+    .history-item-price {
+      color: #fbbf24;
+      font-weight: bold;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .exalted-icon {
+      width: 24px;
+      height: 24px;
+      filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.5));
+    }
+
+    /* ステータスメッセージ */
+    .status {
+      text-align: center;
+      padding: 30px;
+      color: #9ca3af;
+      font-size: 12px;
+    }
+
+    .error {
+      color: #ef4444;
+    }
+
+    /* 設定パネル */
+    .settings-panel {
+      display: none;
+      position: absolute;
+      top: 50px;
+      right: 15px;
+      background: rgba(20, 20, 30, 0.98);
+      border: 1px solid rgba(139, 92, 246, 0.5);
+      border-radius: 5px;
+      padding: 15px;
+      min-width: 300px;
+      z-index: 1000;
+    }
+
+    .settings-panel.show {
+      display: block;
+    }
+
+    .settings-row {
+      margin-bottom: 15px;
+    }
+
+    .settings-label {
+      display: block;
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 5px;
+    }
+
+    .settings-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: #ffffff;
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 3px;
+      font-family: 'Consolas', monospace;
+    }
+
+    .settings-input:focus {
+      outline: none;
+      border-color: rgba(139, 92, 246, 0.6);
+    }
+
+    .cache-indicator {
+      display: inline-block;
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-left: 8px;
+    }
+
+    .settings-hint {
+      font-size: 10px;
+      color: #6b7280;
+      margin-top: 5px;
+    }
+
+    .settings-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-left">
+      <div class="title">👹 PoE Goblin</div>
+      <div class="hotkey-display" id="hotkeyDisplay">Ctrl+D</div>
+    </div>
+    <div style="display: flex; gap: 8px; -webkit-app-region: no-drag;">
+      <button class="btn" id="btnSettings">設定</button>
+      <button class="btn btn-close" id="btnClose">✕</button>
+    </div>
+  </div>
+
+  <!-- 設定パネル -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-row">
+      <label class="settings-label">ホットキー</label>
+      <input type="text" class="settings-input" id="hotkeyInput" placeholder="CommandOrControl+D">
+      <div class="settings-hint">
+        例: CommandOrControl+D, F9, F10, CommandOrControl+Shift+P
+      </div>
+    </div>
+    <div class="settings-buttons">
+      <button class="btn" id="btnCancelSettings">キャンセル</button>
+      <button class="btn" id="btnSaveSettings">保存</button>
+    </div>
+  </div>
+
+  <!-- メインコンテンツ -->
+  <div class="content" id="content">
+    <div class="status">
+      アイテムにカーソルを合わせて<br>
+      <strong style="color: #fbbf24;">Ctrl+G</strong> で価格表示<br>
+      <span style="font-size: 10px; opacity: 0.7; margin-top: 8px; display: block;">
+        Esc / 画面外クリック で閉じる
+      </span>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_LEAGUE = "Fate of the Vaal";
+    const LOG_COUNT = 8; // 8回分に変更
+
+    // 初期化
+    let currentHotkey = "CommandOrControl+G";
+
+    async function init() {
+      // 現在のホットキーを取得
+      const hotkeyResult = await window.electronAPI.getHotkey();
+      if (hotkeyResult.success) {
+        currentHotkey = hotkeyResult.hotkey;
+        document.getElementById("hotkeyDisplay").textContent = currentHotkey;
+        document.getElementById("hotkeyInput").value = currentHotkey;
+      }
+
+      // ホットキー押下イベントをリスン
+      window.electronAPI.onHotkeyPressed(() => {
+        fetchItemHistoryFromClipboard();
+      });
+    }
+
+    init();
+
+    // 閉じるボタン
+    document.getElementById("btnClose").addEventListener("click", () => {
+      window.electronAPI.hideWindow();
+    });
+
+    // 設定ボタン
+    document.getElementById("btnSettings").addEventListener("click", () => {
+      const panel = document.getElementById("settingsPanel");
+      panel.classList.toggle("show");
+    });
+
+    // 設定保存
+    document.getElementById("btnSaveSettings").addEventListener("click", async () => {
+      const newHotkey = document.getElementById("hotkeyInput").value.trim();
+      if (newHotkey) {
+        const result = await window.electronAPI.setHotkey(newHotkey);
+        if (result.success) {
+          currentHotkey = result.hotkey;
+          document.getElementById("hotkeyDisplay").textContent = currentHotkey;
+          document.getElementById("settingsPanel").classList.remove("show");
+          showStatus("✅ ホットキーを更新しました: " + currentHotkey);
+        } else {
+          alert("ホットキーの設定に失敗しました: " + result.error);
+        }
+      }
+    });
+
+    // 設定キャンセル
+    document.getElementById("btnCancelSettings").addEventListener("click", () => {
+      document.getElementById("hotkeyInput").value = currentHotkey;
+      document.getElementById("settingsPanel").classList.remove("show");
+    });
+
+    // Escキーで閉じる
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        const settingsPanel = document.getElementById("settingsPanel");
+        if (settingsPanel.classList.contains("show")) {
+          // 設定パネルが開いている場合は閉じる
+          settingsPanel.classList.remove("show");
+        } else {
+          // ウィンドウを閉じる
+          window.electronAPI.hideWindow();
+        }
+      }
+    });
+
+    // ステータス表示
+    function showStatus(message, isError = false) {
+      const content = document.getElementById("content");
+      content.innerHTML = `<div class="status ${isError ? 'error' : ''}">${message}</div>`;
+    }
+
+    // クリップボードからアイテム情報を取得して履歴を表示
+    async function fetchItemHistoryFromClipboard() {
+      showStatus("📋 クリップボードからアイテム情報を取得中...");
+
+      try {
+        // 1. クリップボードから取得
+        const clipboardResult = await window.electronAPI.getItemFromClipboard();
+
+        if (!clipboardResult.success) {
+          throw new Error(clipboardResult.error || "クリップボードからアイテムを取得できませんでした");
+        }
+
+        const parsedItem = clipboardResult.item;
+        console.log("Parsed item:", parsedItem);
+
+        showStatus("🔍 アイテムを検索中...");
+
+        // 2. アイテム名から情報を取得
+        const itemInfoResult = await window.electronAPI.getItemInfoByName(parsedItem.itemName);
+
+        if (!itemInfoResult.success) {
+          throw new Error(itemInfoResult.error || `アイテムが見つかりません: ${parsedItem.itemName}`);
+        }
+
+        const itemInfo = itemInfoResult.data;
+        console.log("Item info:", itemInfo);
+
+        showStatus("📡 価格履歴を取得中...");
+
+        // 3. 価格履歴を取得
+        const historyResult = await window.electronAPI.getItemHistory(
+          itemInfo.itemId,
+          {
+            league: DEFAULT_LEAGUE,
+            logCount: LOG_COUNT,
+            referenceCurrency: "exalted",
+          }
+        );
+
+        if (historyResult.success) {
+          displayHistory(historyResult.data, itemInfo, parsedItem);
+        } else {
+          throw new Error(historyResult.error || "履歴の取得に失敗しました");
+        }
+      } catch (error) {
+        console.error("[Error]", error);
+        showStatus("❌ " + error.message, true);
+      }
+    }
+
+    // 履歴を表示
+    function displayHistory(data, itemInfo, parsedItem) {
+      const priceLogs = data.priceLogs || [];
+      const validLogs = priceLogs.filter((log) => log !== null).slice(0, LOG_COUNT);
+
+      if (validLogs.length === 0) {
+        showStatus("⚠️ 履歴データが見つかりませんでした", true);
+        return;
+      }
+
+      const displayName = itemInfo.japaneseName || itemInfo.englishName || parsedItem.itemName;
+      const cacheIndicator = data.cached ? '<span class="cache-indicator">キャッシュ</span>' : '';
+      const itemIcon = itemInfo.iconUrl || 'https://web.poecdn.com/image/Art/2DItems/Currency/CurrencyRerollRare.png';
+
+      let html = `
+        <div class="item-info">
+          <img src="${itemIcon}" class="item-icon" alt="${displayName}" />
+          <div class="item-details">
+            <div class="item-name">${displayName}</div>
+            <div class="item-meta">
+              <span>レアリティ: ${parsedItem.rarity}</span>
+              <span>言語: ${parsedItem.language === 'ja' ? '日本語' : '英語'}</span>
+              ${cacheIndicator}
+            </div>
+          </div>
+        </div>
+        <div class="history-container">
+          <div class="history-title">💰 価格履歴（高貴なオーブ換算・過去${validLogs.length}回）</div>
+          <div class="history-grid">
+      `;
+
+      validLogs.forEach((log, index) => {
+        const date = new Date(log.time);
+        const dateStr = date.toLocaleString("ja-JP", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+        const price = log.price.toFixed(2);
+        const quantity = log.quantity.toLocaleString("ja-JP");
+
+        html += `
+          <div class="history-item">
+            <div class="history-item-left">
+              <div class="history-item-index">#${index + 1}</div>
+              <div class="history-item-info">
+                <div class="history-item-date">${dateStr}</div>
+                <div class="history-item-quantity">数量: ${quantity}</div>
+              </div>
+            </div>
+            <div class="history-item-price">
+              <img src="https://web.poecdn.com//gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lBZGRNb2RUb1JhcmUiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/ad7c366789/CurrencyAddModToRare.png" class="exalted-icon" alt="Exalted Orb" />
+              ${price}
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+
+      document.getElementById("content").innerHTML = html;
+    }
+  </script>
+</body>
+</html>
