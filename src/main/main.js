@@ -1,4 +1,13 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, screen, Tray, Menu, nativeImage } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  screen,
+  Tray,
+  Menu,
+  nativeImage,
+} from "electron";
 import { exec } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -44,7 +53,7 @@ function createWindow() {
   });
 
   // ウィンドウ作成後に最高レベルで最前面設定
-  mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  mainWindow.setAlwaysOnTop(true, "screen-saver");
 
   // すべてのワークスペース（仮想デスクトップ）で表示
   mainWindow.setVisibleOnAllWorkspaces(true);
@@ -101,14 +110,15 @@ function createWindow() {
  */
 function simulateCtrlC() {
   return new Promise((resolve, reject) => {
-    const cmd = 'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^c\')"';
+    const cmd =
+      "powershell -command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^c')\"";
 
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
-        console.error('[Error] Failed to simulate Ctrl+C:', error);
+        console.error("[Error] Failed to simulate Ctrl+C:", error);
         reject(error);
       } else {
-        console.log('[OK] Ctrl+C simulated successfully');
+        console.log("[OK] Ctrl+C simulated successfully");
         resolve();
       }
     });
@@ -141,12 +151,12 @@ function registerHotkey(hotkey) {
         await simulateCtrlC();
 
         // 2. クリップボード更新を待つ（150-200ms）
-        await new Promise(r => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, 150));
         console.log("[Hotkey] Clipboard should be updated");
 
         // 3. ウィンドウを表示
         mainWindow.show();
-        mainWindow.setAlwaysOnTop(true, 'screen-saver'); // 最前面を再設定
+        mainWindow.setAlwaysOnTop(true, "screen-saver"); // 最前面を再設定
         // クリックスルーを無効化（操作可能に）
         mainWindow.setIgnoreMouseEvents(false);
         isWindowVisible = true;
@@ -158,7 +168,7 @@ function registerHotkey(hotkey) {
         console.error("[Error] Failed to process hotkey:", error);
         // エラー時もウィンドウを表示してエラーメッセージを出せるようにする
         mainWindow.show();
-        mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        mainWindow.setAlwaysOnTop(true, "screen-saver");
         mainWindow.setIgnoreMouseEvents(false);
         isWindowVisible = true;
         mainWindow.webContents.send("hotkey-pressed");
@@ -185,7 +195,12 @@ function createTray() {
   let iconPath;
   if (app.isPackaged) {
     // ビルド後: app.asar内から取得
-    iconPath = path.join(process.resourcesPath, "app.asar", "build", "icon.png");
+    iconPath = path.join(
+      process.resourcesPath,
+      "app.asar",
+      "build",
+      "icon.png"
+    );
   } else {
     // 開発時
     iconPath = path.join(__dirname, "../../build/icon.png");
@@ -219,7 +234,7 @@ function createTray() {
         isWindowVisible = false;
       } else {
         mainWindow.show();
-        mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        mainWindow.setAlwaysOnTop(true, "screen-saver");
         mainWindow.setIgnoreMouseEvents(false);
         isWindowVisible = true;
       }
@@ -241,7 +256,7 @@ function updateTrayMenu() {
       click: () => {
         if (mainWindow) {
           mainWindow.show();
-          mainWindow.setAlwaysOnTop(true, 'screen-saver');
+          mainWindow.setAlwaysOnTop(true, "screen-saver");
           mainWindow.setIgnoreMouseEvents(false);
           isWindowVisible = true;
         }
