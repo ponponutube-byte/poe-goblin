@@ -93,6 +93,7 @@ export async function fetchItemHistory(itemId, options = {}) {
       league,
       logCount,
       referenceCurrency,
+      endTime: new Date().toISOString(),
     });
 
     // APIレスポンスの構造を統一（price_history -> priceLogs）
@@ -100,7 +101,8 @@ export async function fetchItemHistory(itemId, options = {}) {
     const normalizedHistory = {
       ...history,
       priceLogs: history.price_history || history.priceLogs || [],
-      hasMore: history.has_more !== undefined ? history.has_more : history.hasMore,
+      hasMore:
+        history.has_more !== undefined ? history.has_more : history.hasMore,
     };
 
     // キャッシュに保存

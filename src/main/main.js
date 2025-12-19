@@ -1,4 +1,5 @@
-import { app, BrowserWindow, globalShortcut, ipcMain } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, Tray, Menu, nativeImage } from "electron";
+import { exec } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
@@ -23,6 +24,7 @@ dotenv.config({ path: envPath });
 let mainWindow;
 let isWindowVisible = false;
 let currentHotkey = "CommandOrControl+G"; // デフォルトのホットキー
+let tray = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -33,12 +35,19 @@ function createWindow() {
     alwaysOnTop: true, // 常に最前面
     skipTaskbar: true, // タスクバーに表示しない
     resizable: false,
+    focusable: false, // ゲームからフォーカスを奪わない
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  // ウィンドウ作成後に最高レベルで最前面設定
+  mainWindow.setAlwaysOnTop(true, 'screen-saver');
+
+  // すべてのワークスペース（仮想デスクトップ）で表示
+  mainWindow.setVisibleOnAllWorkspaces(true);
 
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 
@@ -61,8 +70,48 @@ function createWindow() {
     }
   });
 
+  // 閉じるボタンでトレイに格納（終了しない）
+  mainWindow.on("close", (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      mainWindow.setIgnoreMouseEvents(true, { forward: true });
+      isWindowVisible = false;
+      console.log("[Window] Hidden to tray");
+
+      // 初回のみ通知を表示
+      if (tray && !app.hasShownTrayNotification) {
+        tray.displayBalloon({
+          title: "PoE Goblin",
+          content: `システムトレイに最小化しました。\n${currentHotkey} で価格チェックできます。`,
+        });
+        app.hasShownTrayNotification = true;
+      }
+    }
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+}
+
+/**
+ * PowerShell を使って Ctrl+C をシミュレート
+ * @returns {Promise<void>}
+ */
+function simulateCtrlC() {
+  return new Promise((resolve, reject) => {
+    const cmd = 'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^c\')"';
+
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error('[Error] Failed to simulate Ctrl+C:', error);
+        reject(error);
+      } else {
+        console.log('[OK] Ctrl+C simulated successfully');
+        resolve();
+      }
+    });
   });
 }
 
@@ -86,21 +135,41 @@ function registerHotkey(hotkey) {
       isWindowVisible = false;
       console.log("[Window] Hidden");
     } else {
-      // ウィンドウを表示
-      mainWindow.show();
-      // クリックスルーを無効化（操作可能に）
-      mainWindow.setIgnoreMouseEvents(false);
-      isWindowVisible = true;
-      console.log("[Window] Shown");
+      try {
+        // 1. Ctrl+C をシミュレート（ウィンドウ表示前に実行）
+        console.log("[Hotkey] Simulating Ctrl+C...");
+        await simulateCtrlC();
 
-      // レンダラープロセスにイベントを送信
-      mainWindow.webContents.send("hotkey-pressed");
+        // 2. クリップボード更新を待つ（150-200ms）
+        await new Promise(r => setTimeout(r, 150));
+        console.log("[Hotkey] Clipboard should be updated");
+
+        // 3. ウィンドウを表示
+        mainWindow.show();
+        mainWindow.setAlwaysOnTop(true, 'screen-saver'); // 最前面を再設定
+        // クリックスルーを無効化（操作可能に）
+        mainWindow.setIgnoreMouseEvents(false);
+        isWindowVisible = true;
+        console.log("[Window] Shown");
+
+        // 4. レンダラープロセスにイベントを送信
+        mainWindow.webContents.send("hotkey-pressed");
+      } catch (error) {
+        console.error("[Error] Failed to process hotkey:", error);
+        // エラー時もウィンドウを表示してエラーメッセージを出せるようにする
+        mainWindow.show();
+        mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        mainWindow.setIgnoreMouseEvents(false);
+        isWindowVisible = true;
+        mainWindow.webContents.send("hotkey-pressed");
+      }
     }
   });
 
   if (ret) {
     console.log(`[OK] Hotkey ${hotkey} registered successfully`);
     currentHotkey = hotkey;
+    updateTrayMenu(); // トレイメニューを更新
   } else {
     console.error(`[Error] Failed to register hotkey: ${hotkey}`);
   }
@@ -108,8 +177,88 @@ function registerHotkey(hotkey) {
   return ret;
 }
 
+/**
+ * システムトレイを作成
+ */
+function createTray() {
+  // アイコン画像のパス
+  const iconPath = path.join(__dirname, "../../build/icon.png");
+
+  let trayIcon;
+  try {
+    trayIcon = nativeImage.createFromPath(iconPath);
+    // Windows では 16x16 にリサイズ
+    if (process.platform === "win32") {
+      trayIcon = trayIcon.resize({ width: 16, height: 16 });
+    }
+  } catch (e) {
+    console.error("[Tray] Failed to load icon:", e);
+    // フォールバック: 空のアイコン
+    trayIcon = nativeImage.createEmpty();
+  }
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip("PoE Goblin - 価格チェックツール");
+
+  updateTrayMenu();
+
+  // トレイアイコンをクリックでウィンドウ表示/非表示
+  tray.on("click", () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+        mainWindow.setIgnoreMouseEvents(true, { forward: true });
+        isWindowVisible = false;
+      } else {
+        mainWindow.show();
+        mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        mainWindow.setIgnoreMouseEvents(false);
+        isWindowVisible = true;
+      }
+    }
+  });
+
+  console.log("[Tray] System tray created");
+}
+
+/**
+ * トレイメニューを更新
+ */
+function updateTrayMenu() {
+  if (!tray) return;
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "ウィンドウを表示",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.setAlwaysOnTop(true, 'screen-saver');
+          mainWindow.setIgnoreMouseEvents(false);
+          isWindowVisible = true;
+        }
+      },
+    },
+    {
+      label: `ホットキー: ${currentHotkey}`,
+      enabled: false, // 表示のみ、クリック不可
+    },
+    { type: "separator" },
+    {
+      label: "終了",
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+}
+
 app.whenReady().then(() => {
   createWindow();
+  createTray(); // システムトレイを作成
 
   // IPCハンドラー: アイテム履歴を取得
   ipcMain.handle("get-item-history", async (event, itemId, options = {}) => {
@@ -209,13 +358,20 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("window-all-closed", () => {
-  // ホットキーを全て解除
-  globalShortcut.unregisterAll();
+// 完全終了の準備
+app.on("before-quit", () => {
+  app.isQuitting = true;
+});
 
-  if (process.platform !== "darwin") {
+app.on("window-all-closed", () => {
+  // トレイに常駐するため、ウィンドウが閉じてもアプリは終了しない
+  // 終了は tray のメニューから行う
+  // Macの場合は通常の挙動を維持
+  if (process.platform === "darwin") {
+    globalShortcut.unregisterAll();
     app.quit();
   }
+  // Windows/Linuxでは何もしない（トレイに常駐）
 });
 
 // アプリ終了時にホットキーを解除
