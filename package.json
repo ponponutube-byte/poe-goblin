@@ -5,8 +5,15 @@
   "main": "src/main/main.js",
   "type": "module",
   "scripts": {
-    "start": "electron .",
-    "dev": "nodemon --exec electron . --watch src --ext js,html,css"
+    "start": "chcp 65001 >nul 2>&1 & electron .",
+    "dev": "chcp 65001 >nul 2>&1 & nodemon --exec electron . --watch src --ext js,html,css",
+    "build:item-map": "node scripts/buildItemMap.js",
+    "create:mapping-template": "node scripts/createMappingTemplate.js",
+    "fetch:japanese-names": "node scripts/fetchJapaneseNames.js",
+    "parse:category-paths": "node scripts/parseItemsPage.js",
+    "scrape:all": "npm run parse:category-paths && npm run fetch:japanese-names && npm run build:item-map",
+    "build": "electron-builder --win --x64",
+    "build:portable": "electron-builder --win portable --x64"
   },
   "keywords": [
     "poe",
@@ -15,8 +22,60 @@
   ],
   "author": "Your Name",
   "license": "MIT",
+  "build": {
+    "appId": "com.poegoblin.app",
+    "productName": "PoE Goblin",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "env.template",
+      "!src/data/items/japaneseNameMapping.json"
+    ],
+    "extraResources": [
+      {
+        "from": "src/data/items",
+        "to": "app/src/data/items",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PoE Goblin",
+      "artifactName": "PoE-Goblin-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "PoE-Goblin-${version}-portable.exe"
+    }
+  },
   "devDependencies": {
     "electron": "^33.2.1",
+    "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
     "nodemon": "^3.1.11"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "dotenv": "^17.2.3"
   }
 }
