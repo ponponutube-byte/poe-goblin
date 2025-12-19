@@ -181,14 +181,22 @@ function registerHotkey(hotkey) {
  * システムトレイを作成
  */
 function createTray() {
-  // アイコン画像のパス
-  const iconPath = path.join(__dirname, "../../build/icon.png");
+  // アイコン画像のパス（開発時とビルド後で異なる）
+  let iconPath;
+  if (app.isPackaged) {
+    // ビルド後: app.asar内から取得
+    iconPath = path.join(process.resourcesPath, "app.asar", "build", "icon.png");
+  } else {
+    // 開発時
+    iconPath = path.join(__dirname, "../../build/icon.png");
+  }
 
   let trayIcon;
   try {
     trayIcon = nativeImage.createFromPath(iconPath);
+    console.log("[Tray] Icon loaded from:", iconPath);
     // Windows では 16x16 にリサイズ
-    if (process.platform === "win32") {
+    if (process.platform === "win32" && !trayIcon.isEmpty()) {
       trayIcon = trayIcon.resize({ width: 16, height: 16 });
     }
   } catch (e) {
