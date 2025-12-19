@@ -13,7 +13,10 @@
 /out/
 
 # production
-/build
+# /build を除外（electron-builderのビルドアイコンを含むため）
+
+# electron-builder output
+dist/
 
 # misc
 .DS_Store
@@ -28,9 +31,16 @@ yarn-error.log*
 .env*.local
 .env
 
+# temporary files
+scripts/tmp/
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+scripts/tmp
+scripts/debug_html.html
