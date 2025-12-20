@@ -294,6 +294,33 @@
       gap: 8px;
       justify-content: flex-end;
     }
+
+    .version-info {
+      font-size: 10px;
+      color: #6b7280;
+      text-align: right;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(100, 100, 150, 0.2);
+    }
+
+    .update-status {
+      font-size: 10px;
+      color: #10b981;
+      margin-top: 5px;
+    }
+
+    .update-status.checking {
+      color: #3b82f6;
+    }
+
+    .update-status.available {
+      color: #f59e0b;
+    }
+
+    .update-status.error {
+      color: #ef4444;
+    }
   </style>
 </head>
 <body>
@@ -317,6 +344,14 @@
       <div class="settings-hint">
         例: CommandOrControl+D, F9, F10, CommandOrControl+Shift+P
       </div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">アップデート</label>
+      <button class="btn" id="btnCheckUpdate" style="width: 100%;">アップデートを確認</button>
+      <div class="update-status" id="updateStatus"></div>
+    </div>
+    <div class="version-info">
+      バージョン: <span id="appVersion">0.1.0</span>
     </div>
     <div class="settings-buttons">
       <button class="btn" id="btnCancelSettings">キャンセル</button>
@@ -351,9 +386,28 @@
         document.getElementById("hotkeyInput").value = currentHotkey;
       }
 
+      // アプリバージョンを取得
+      const versionResult = await window.electronAPI.getAppVersion();
+      if (versionResult.success) {
+        document.getElementById("appVersion").textContent = versionResult.version;
+      }
+
       // ホットキー押下イベントをリスン
       window.electronAPI.onHotkeyPressed(() => {
         fetchItemHistoryFromClipboard();
+      });
+
+      // アップデート進捗をリスン
+      window.electronAPI.onUpdateDownloadStarted(() => {
+        const statusEl = document.getElementById("updateStatus");
+        statusEl.textContent = "ダウンロード中...";
+        statusEl.className = "update-status checking";
+      });
+
+      window.electronAPI.onUpdateDownloadProgress((data) => {
+        const statusEl = document.getElementById("updateStatus");
+        statusEl.textContent = `ダウンロード中... ${data.percent}%`;
+        statusEl.className = "update-status checking";
       });
     }
 
@@ -390,6 +444,47 @@
     document.getElementById("btnCancelSettings").addEventListener("click", () => {
       document.getElementById("hotkeyInput").value = currentHotkey;
       document.getElementById("settingsPanel").classList.remove("show");
+    });
+
+    // アップデートチェックボタン
+    document.getElementById("btnCheckUpdate").addEventListener("click", async () => {
+      const statusEl = document.getElementById("updateStatus");
+      const btnCheckUpdate = document.getElementById("btnCheckUpdate");
+
+      statusEl.textContent = "確認中...";
+      statusEl.className = "update-status checking";
+      btnCheckUpdate.disabled = true;
+
+      try {
+        const result = await window.electronAPI.checkForUpdates();
+
+        if (result.success) {
+          if (result.hasUpdate) {
+            statusEl.textContent = `新しいバージョン ${result.version} が利用可能です`;
+            statusEl.className = "update-status available";
+
+            if (result.isPortable) {
+              statusEl.textContent += " (ダウンロードページが開きます)";
+            }
+          } else {
+            statusEl.textContent = "✅ 最新バージョンです";
+            statusEl.className = "update-status";
+          }
+        } else {
+          statusEl.textContent = `エラー: ${result.error}`;
+          statusEl.className = "update-status error";
+        }
+      } catch (error) {
+        statusEl.textContent = `エラー: ${error.message}`;
+        statusEl.className = "update-status error";
+      } finally {
+        btnCheckUpdate.disabled = false;
+
+        // 5秒後にステータスをクリア
+        setTimeout(() => {
+          statusEl.textContent = "";
+        }, 5000);
+      }
     });
 
     // Escキーで閉じる
