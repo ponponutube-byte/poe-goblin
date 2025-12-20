@@ -1,6 +1,6 @@
 {
   "name": "poe-goblin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "PoE Trade Tool with Japanese support",
   "main": "src/main/main.js",
   "type": "module",

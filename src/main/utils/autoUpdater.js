@@ -16,7 +16,8 @@ autoUpdater.logger = log;
 autoUpdater.autoDownload = false;
 
 // ポータブル版かどうかを判定
-const isPortable = process.env.PORTABLE_EXECUTABLE_DIR !== undefined;
+// 【デバッグ用】一時的に強制的にfalseにして、インストーラー版として動作させる
+const isPortable = false; // process.env.PORTABLE_EXECUTABLE_DIR !== undefined;
 
 /**
  * アップデート機能をセットアップ
@@ -202,8 +203,7 @@ async function checkForUpdatesManual() {
     return {
       hasUpdate: true,
       version: latestVersion,
-      downloadUrl:
-        portableAsset?.browser_download_url || release.html_url,
+      downloadUrl: portableAsset?.browser_download_url || release.html_url,
     };
   }
 
