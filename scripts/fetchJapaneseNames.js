@@ -1,5 +1,6 @@
 /**
  * poe2db.twから日本語名を取得してマッピングを更新
+ * カテゴリ設定ベースの柔軟なパース処理
  */
 
 import fs from "fs";
@@ -15,51 +16,194 @@ const __dirname = path.dirname(__filename);
 const BASE_URL = "https://poe2db.tw/jp/";
 const TMP_DIR = path.join(__dirname, "tmp");
 
-// 処理するパスのリスト
-// category_paths.jsonから自動的に読み込むか、手動で指定
-let TARGET_PATHS = [];
+// ========================================
+// 抽出戦略の実装
+// ========================================
 
 /**
- * category_paths.jsonからパスを読み込む
- * @returns {Array<string>} パスの配列
+ * 日本語文字が含まれているかチェック
  */
-function loadCategoryPaths() {
-  const categoryPathsPath = path.join(TMP_DIR, "category_paths.json");
+function containsJapanese(text) {
+  const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+  return japanesePattern.test(text);
+}
+
+/**
+ * 抽出戦略の実装
+ */
+const EXTRACTION_STRATEGIES = {
+  /**
+   * 戦略1: リンクテキストから（標準）
+   */
+  linkText: ($, $link) => {
+    const $clone = $link.clone();
+    $clone.find("img").remove();
+    const text = $clone.text().trim();
+    return containsJapanese(text) ? text : null;
+  },
+
+  /**
+   * 戦略2: リンクテキストまたはテーブルセル
+   */
+  linkTextOrTableCell: ($, $link) => {
+    // まずリンクテキストを試行
+    const $clone = $link.clone();
+    $clone.find("img").remove();
+    const linkText = $clone.text().trim();
+    if (containsJapanese(linkText)) {
+      return linkText;
+    }
+
+    // 次にテーブルセルを試行
+    const $td = $link.closest("td");
+    if ($td.length > 0) {
+      const $tdClone = $td.clone();
+      $tdClone.find("img, a").remove();
+      const cellText = $tdClone.text().trim();
+      if (containsJapanese(cellText)) {
+        return cellText;
+      }
+    }
+
+    return null;
+  },
+
+  /**
+   * 戦略3: Uniqueアイテムの特殊構造
+   */
+  uniqueNameSpan: ($, $link) => {
+    // まず<span class="uniqueName">を探す
+    const $uniqueName = $link.find("span.uniqueName");
+    if ($uniqueName.length > 0) {
+      const text = $uniqueName.text().trim();
+      if (containsJapanese(text)) {
+        return text;
+      }
+    }
+
+    // フォールバック: 通常のリンクテキスト
+    const $clone = $link.clone();
+    $clone.find("img").remove();
+    const text = $clone.text().trim();
+    return containsJapanese(text) ? text : null;
+  },
+
+  /**
+   * 戦略4: 柔軟な抽出（複数の方法を順番に試行）
+   */
+  flexible: ($, $link) => {
+    // 1. uniqueName
+    const $uniqueName = $link.find("span.uniqueName");
+    if ($uniqueName.length > 0) {
+      const text = $uniqueName.text().trim();
+      if (containsJapanese(text)) {
+        return text;
+      }
+    }
+
+    // 2. リンクテキスト
+    const $clone = $link.clone();
+    $clone.find("img").remove();
+    const linkText = $clone.text().trim();
+    if (containsJapanese(linkText)) {
+      return linkText;
+    }
+
+    // 3. title属性
+    const title = $link.attr("title");
+    if (title && containsJapanese(title)) {
+      return title.trim();
+    }
+
+    // 4. 親のテーブルセル
+    const $td = $link.closest("td");
+    if ($td.length > 0) {
+      const $tdClone = $td.clone();
+      $tdClone.find("img, a").remove();
+      const cellText = $tdClone.text().trim();
+      if (containsJapanese(cellText)) {
+        return cellText;
+      }
+    }
+
+    return null;
+  },
+};
+
+// ========================================
+// 設定管理
+// ========================================
+
+/**
+ * デフォルト設定を返す
+ */
+function getDefaultConfig() {
+  return {
+    categories: [
+      {
+        path: "Stackable_Currency",
+        name: "通貨",
+        parserType: "standard",
+        enabled: true,
+      },
+      {
+        path: "Augment",
+        name: "オーグメント",
+        parserType: "augment",
+        enabled: true,
+      },
+      {
+        path: "Essence",
+        name: "エッセンス",
+        parserType: "standard",
+        enabled: true,
+      },
+    ],
+    parserTypes: {
+      standard: {
+        selectors: ["a.item_currency"],
+        extractionStrategy: "linkText",
+      },
+      augment: {
+        selectors: ["a.item_currency", "table a[href^='/jp/']", "a.whiteitem"],
+        extractionStrategy: "linkTextOrTableCell",
+      },
+    },
+  };
+}
+
+/**
+ * カテゴリ設定を読み込む
+ */
+function loadCategoryConfig() {
+  const configPath = path.join(__dirname, "category_config.json");
 
   try {
-    if (fs.existsSync(categoryPathsPath)) {
-      const paths = JSON.parse(fs.readFileSync(categoryPathsPath, "utf-8"));
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
       console.log(
-        `📋 Loaded ${paths.length} category paths from category_paths.json`
+        `📋 Loaded ${config.categories.length} categories from category_config.json`
       );
-      return paths;
+
+      // 有効なカテゴリのみをフィルタ
+      const enabledCategories = config.categories.filter((cat) => cat.enabled);
+      console.log(`   Enabled: ${enabledCategories.length} categories`);
+
+      return config;
     } else {
-      console.warn(`⚠️  category_paths.json not found. Using default paths.`);
-      // デフォルトのパス（カレンシー関連）
-      return [
-        "Stackable_Currency",
-        "Augment",
-        "Omen",
-        "Liquid_Emotions",
-        "Essence",
-        "Splinter",
-        "Catalysts",
-      ];
+      console.error(`❌ category_config.json not found at: ${configPath}`);
+      console.log(`⚠️  Using default config as fallback...`);
+      return getDefaultConfig();
     }
   } catch (error) {
-    console.error(`❌ Error loading category_paths.json:`, error);
-    // エラー時はデフォルトのパスを使用
-    return [
-      "Stackable_Currency",
-      "Augment",
-      "Omen",
-      "Liquid_Emotions",
-      "Essence",
-      "Splinter",
-      "Catalysts",
-    ];
+    console.error(`❌ Error loading category_config.json:`, error);
+    return getDefaultConfig();
   }
 }
+
+// ========================================
+// HTTP リクエスト処理
+// ========================================
 
 /**
  * 遅延関数
@@ -179,45 +323,17 @@ function fetchHTMLWithOptions(url, options) {
   });
 }
 
+// ========================================
+// HTML解析処理
+// ========================================
+
 /**
- * HTMLからアイテム情報を抽出
- * @param {string} html - HTML文字列
- * @returns {Array<{englishName: string, japaneseName: string}>} アイテム情報の配列
+ * hrefでリンクをグループ化
  */
-function parseHTML(html) {
-  const items = [];
-  const $ = cheerio.load(html);
+function groupLinksByHref($, links) {
+  const hrefMap = {};
 
-  console.log("📊 HTML解析開始...");
-
-  // 複数のクラスパターンに対応
-  // item_currency (StackableCurrency, Augment, Essence, Splinter, Catalysts, Liquid_Emotions)
-  // whiteitem.Omen (Omen)
-  // uniqueitem (Unique_item)
-  const currencyLinks = $("a.item_currency, a.whiteitem.Omen, a.uniqueitem");
-  console.log(`   Found ${currencyLinks.length} item link(s)`);
-
-  if (currencyLinks.length === 0) {
-    console.warn("   ⚠️  No item links found in HTML");
-    // tmpディレクトリが存在しない場合は作成
-    if (!fs.existsSync(TMP_DIR)) {
-      fs.mkdirSync(TMP_DIR, { recursive: true });
-    }
-    // HTMLをファイルに保存して確認
-    const debugPath = path.join(TMP_DIR, "debug_html.html");
-    fs.writeFileSync(debugPath, html, "utf-8");
-    console.log(`   💾 HTML saved to: ${debugPath}`);
-    return items;
-  }
-
-  let processedCount = 0;
-  let skippedCount = 0;
-  const seen = new Set(); // 重複を避けるため
-  const hrefMap = {}; // hrefごとにリンクをグループ化
-
-  // まず、同じhrefを持つリンクをグループ化
-  // hrefを正規化して比較（/jp/を除去、相対パスと絶対パスを統一）
-  currencyLinks.each((index, element) => {
+  links.each((index, element) => {
     const $link = $(element);
     let href = $link.attr("href");
     if (!href) {
@@ -225,10 +341,7 @@ function parseHTML(html) {
     }
 
     // hrefを正規化: /jp/Brynhands_Mark -> Brynhands_Mark
-    let normalizedHref = href;
-    if (href.startsWith("/jp/")) {
-      normalizedHref = href.replace("/jp/", "");
-    }
+    let normalizedHref = href.replace(/^\/jp\//, "");
 
     if (!hrefMap[normalizedHref]) {
       hrefMap[normalizedHref] = [];
@@ -236,94 +349,132 @@ function parseHTML(html) {
     hrefMap[normalizedHref].push($link);
   });
 
+  return hrefMap;
+}
+
+/**
+ * デバッグ用HTMLを保存
+ */
+function saveDebugHTML(html, categoryPath) {
+  if (!fs.existsSync(TMP_DIR)) {
+    fs.mkdirSync(TMP_DIR, { recursive: true });
+  }
+  const debugPath = path.join(TMP_DIR, `debug_${categoryPath}.html`);
+  fs.writeFileSync(debugPath, html, "utf-8");
+  console.log(`   💾 HTML saved to: ${debugPath}`);
+}
+
+/**
+ * HTMLからアイテム情報を抽出（設定ベース）
+ * @param {string} html - HTML文字列
+ * @param {Object} category - カテゴリ設定
+ * @param {Object} parserConfig - パーサー設定
+ * @returns {Array<{englishName: string, japaneseName: string}>} アイテム情報の配列
+ */
+function parseHTML(html, category, parserConfig) {
+  const items = [];
+  const $ = cheerio.load(html);
+
+  console.log(`📊 HTML解析開始...`);
+  console.log(`   カテゴリ: ${category.name} (${category.path})`);
+  console.log(`   パーサータイプ: ${category.parserType}`);
+  console.log(`   説明: ${parserConfig.description}`);
+
+  // セレクタでリンクを検索
+  const selectors = parserConfig.selectors.join(", ");
+  const currencyLinks = $(selectors);
+  console.log(`   Found ${currencyLinks.length} item link(s)`);
+
+  if (currencyLinks.length === 0) {
+    console.warn(`   ⚠️  No item links found`);
+    saveDebugHTML(html, category.path);
+    return items;
+  }
+
+  // 抽出戦略を取得
+  const extractStrategy =
+    EXTRACTION_STRATEGIES[parserConfig.extractionStrategy];
+  if (!extractStrategy) {
+    console.error(
+      `   ❌ Unknown extraction strategy: ${parserConfig.extractionStrategy}`
+    );
+    return items;
+  }
+
+  // hrefでグループ化
+  const hrefMap = groupLinksByHref($, currencyLinks);
   console.log(`   Grouped into ${Object.keys(hrefMap).length} unique items`);
 
-  // 各hrefグループから日本語名を取得
+  // 各アイテムを処理
+  let processedCount = 0;
+  let skippedCount = 0;
+
   Object.entries(hrefMap).forEach(([normalizedHref, links]) => {
-    // 正規化されたhrefから英語名を抽出
-    // Brynhands_Mark -> Brynhands Mark
-    let englishName = normalizedHref.replace(/_/g, " ").trim();
+    const englishName = normalizedHref.replace(/_/g, " ").trim();
 
-    // 既に処理したアイテムはスキップ
-    if (seen.has(englishName)) {
-      skippedCount++;
-      return;
-    }
-    seen.add(englishName);
-
-    // 同じhrefを持つリンクの中で、テキストを含むものを探す
-    let japaneseName = "";
+    let japaneseName = null;
     for (const $link of links) {
-      // Uniqueアイテムの場合: <span class="uniqueName">内のテキストを取得
-      const $uniqueName = $link.find("span.uniqueName");
-      if ($uniqueName.length > 0) {
-        japaneseName = $uniqueName.text().trim();
-        if (japaneseName) {
-          break;
-        }
-      }
-
-      // その他の場合: 画像タグを除去してテキストのみを取得
-      const $clone = $link.clone();
-      $clone.find("img").remove();
-      const text = $clone.text().trim();
-
-      // 日本語文字が含まれているか確認
-      const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
-      if (text && japanesePattern.test(text)) {
-        japaneseName = text;
-        break;
-      }
+      japaneseName = extractStrategy($, $link);
+      if (japaneseName) break;
     }
 
-    // 日本語名が取得できた場合、アイテムを追加
     if (japaneseName) {
       items.push({
         englishName,
         japaneseName,
+        parserType: category.parserType, // デバッグ用
       });
       processedCount++;
-      if (processedCount <= 10) {
+      if (processedCount <= 5) {
         console.log(
           `   ✅ [${processedCount}] "${englishName}" → "${japaneseName}"`
         );
       }
     } else {
       skippedCount++;
-      if (processedCount + skippedCount <= 5) {
-        console.log(
-          `   ⚠️  No Japanese name found for "${englishName}" (${links.length} link(s))`
-        );
+      if (skippedCount <= 3) {
+        console.log(`   ⚠️  No Japanese name found for "${englishName}"`);
       }
     }
   });
 
-  console.log(`\n📊 解析結果:`);
-  console.log(`   処理済み: ${processedCount}`);
-  console.log(`   スキップ: ${skippedCount}`);
-  console.log(`   合計: ${currencyLinks.length}リンク\n`);
+  if (processedCount > 5) {
+    console.log(`   ... and ${processedCount - 5} more items processed`);
+  }
+  if (skippedCount > 3) {
+    console.log(`   ... and ${skippedCount - 3} more items skipped`);
+  }
+
+  console.log(
+    `\n📊 解析結果 (${category.name}): ${processedCount}/${
+      Object.keys(hrefMap).length
+    } items\n`
+  );
 
   return items;
 }
 
+// ========================================
+// メイン処理
+// ========================================
+
 /**
- * 単一のパスからアイテムを取得
- * @param {string} path - パス（例: "Stackable_Currency"）
- * @returns {Promise<Array<{englishName: string, japaneseName: string}>>} アイテム情報の配列
+ * 単一のカテゴリからアイテムを取得
  */
-async function fetchItemsFromPath(path) {
-  const url = `${BASE_URL}${path}`;
-  console.log(`\n📡 Fetching: ${url}`);
+async function fetchItemsFromCategory(category, parserConfig) {
+  const url = `${BASE_URL}${category.path}`;
+  console.log(`\n${"=".repeat(70)}`);
+  console.log(`📡 Fetching: ${url}`);
   console.log(`⏳ Waiting 2 seconds before request to avoid rate limiting...`);
-  await delay(2000); // 2秒待機
+  await delay(2000);
 
   const html = await fetchHTML(url);
   console.log(`✅ HTML fetched (${html.length} bytes)`);
 
-  // HTMLを解析
-  console.log(`🔍 Parsing HTML for ${path}...`);
-  const items = parseHTML(html);
-  console.log(`✅ Found ${items.length} items from ${path}`);
+  // パース処理
+  console.log(`🔍 Parsing HTML for ${category.name}...`);
+  const items = parseHTML(html, category, parserConfig);
+  console.log(`✅ Found ${items.length} items from ${category.name}`);
 
   return items;
 }
@@ -332,13 +483,20 @@ async function fetchItemsFromPath(path) {
  * マッピングを更新
  */
 async function updateMapping() {
-  // カテゴリパスを読み込む
-  TARGET_PATHS = loadCategoryPaths();
+  // カテゴリ設定を読み込む
+  const config = loadCategoryConfig();
+  const enabledCategories = config.categories.filter((cat) => cat.enabled);
 
-  console.log("🔧 Fetching Japanese names from poe2db.tw...\n");
-  console.log(
-    `📋 Processing ${TARGET_PATHS.length} paths: ${TARGET_PATHS.join(", ")}\n`
-  );
+  console.log("\n" + "=".repeat(70));
+  console.log("🔧 Fetching Japanese names from poe2db.tw...");
+  console.log("=".repeat(70));
+  console.log(`📋 Processing ${enabledCategories.length} categories:`);
+  enabledCategories.forEach((cat, index) => {
+    console.log(
+      `   ${index + 1}. ${cat.name} (${cat.path}) - ${cat.parserType}`
+    );
+  });
+  console.log("=".repeat(70) + "\n");
 
   try {
     // 既存のマッピングを読み込む
@@ -348,32 +506,41 @@ async function updateMapping() {
     );
     const existingMapping = JSON.parse(fs.readFileSync(mappingPath, "utf-8"));
 
-    // 全パスからアイテムを取得
+    // 全カテゴリからアイテムを取得
     const allItems = [];
     let totalUpdatedCount = 0;
     let totalNewCount = 0;
 
-    for (let i = 0; i < TARGET_PATHS.length; i++) {
-      const path = TARGET_PATHS[i];
+    for (let i = 0; i < enabledCategories.length; i++) {
+      const category = enabledCategories[i];
       try {
-        const items = await fetchItemsFromPath(path);
+        const parserConfig = config.parserTypes[category.parserType];
+        if (!parserConfig) {
+          console.error(
+            `❌ Unknown parser type: ${category.parserType} for ${category.path}`
+          );
+          continue;
+        }
+
+        const items = await fetchItemsFromCategory(category, parserConfig);
         allItems.push(...items);
 
-        // パス間で待機（最後のパス以外）
-        if (i < TARGET_PATHS.length - 1) {
-          console.log(`\n⏳ Waiting 2 seconds before next path...`);
+        // カテゴリ間で待機（最後のカテゴリ以外）
+        if (i < enabledCategories.length - 1) {
+          console.log(`\n⏳ Waiting 2 seconds before next category...`);
           await delay(2000);
         }
       } catch (error) {
-        console.error(`❌ Error fetching ${path}:`, error);
-        console.log(`⚠️  Continuing with next path...`);
+        console.error(`❌ Error fetching ${category.path}:`, error.message);
+        console.log(`⚠️  Continuing with next category...`);
       }
     }
 
-    console.log(`\n📊 Total items found: ${allItems.length}`);
+    console.log(`\n${"=".repeat(70)}`);
+    console.log(`📊 Total items found: ${allItems.length}`);
 
     if (allItems.length === 0) {
-      console.warn("⚠️  No items found from any path.");
+      console.warn("⚠️  No items found from any category.");
       return;
     }
 
@@ -388,7 +555,7 @@ async function updateMapping() {
       }
     });
 
-    console.log(`📊 Unique items after deduplication: ${uniqueItems.length}\n`);
+    console.log(`📊 Unique items after deduplication: ${uniqueItems.length}`);
 
     // マッピングを更新
     uniqueItems.forEach((item) => {
@@ -415,12 +582,14 @@ async function updateMapping() {
       "utf-8"
     );
 
-    console.log(`✅ Mapping updated:`);
+    console.log(`\n${"=".repeat(70)}`);
+    console.log(`✅ Mapping updated successfully!`);
     console.log(`   Updated: ${totalUpdatedCount}`);
     console.log(`   New: ${totalNewCount}`);
     console.log(
       `   Total items in mapping: ${Object.keys(existingMapping).length}`
     );
+    console.log("=".repeat(70) + "\n");
   } catch (error) {
     console.error("❌ Error:", error);
     process.exit(1);
