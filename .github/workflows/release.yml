@@ -16,37 +16,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
           cache: "npm"
 
-      - name: Install dependencies with retry
-        shell: pwsh
-        run: |
-          $maxAttempts = 3
-          $attempt = 1
-          $success = $false
-          
-          while ($attempt -le $maxAttempts -and -not $success) {
-            Write-Host "Attempt $attempt of $maxAttempts..."
-            try {
-              npm ci
-              $success = $true
-              Write-Host "✅ npm ci succeeded!"
-            }
-            catch {
-              Write-Host "❌ Attempt $attempt failed. Error: $_"
-              if ($attempt -lt $maxAttempts) {
-                Write-Host "Waiting 30 seconds before retry..."
-                Start-Sleep -Seconds 30
-              }
-              $attempt++
-            }
-          }
-          
-          if (-not $success) {
-            Write-Host "❌ All attempts failed"
-            exit 1
-          }
+      - name: Install dependencies
+        run: npm ci
+        continue-on-error: false
 
       - name: Build application
         run: npm run build
