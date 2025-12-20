@@ -1,0 +1,165 @@
+{
+  "categories": [
+    {
+      "path": "Stackable_Currency",
+      "name": "スタック可能通貨",
+      "parserType": "standard",
+      "enabled": true,
+      "description": "通貨アイテム、オーブなど"
+    },
+    {
+      "path": "Augment",
+      "name": "オーグメント",
+      "parserType": "augment",
+      "enabled": true,
+      "description": "オーグメントソケットにはめるアイテム"
+    },
+    {
+      "path": "Omen",
+      "name": "オーメン",
+      "parserType": "omen",
+      "enabled": true,
+      "description": "オーメンアイテム"
+    },
+    {
+      "path": "Essence",
+      "name": "エッセンス",
+      "parserType": "standard",
+      "enabled": true,
+      "description": "エッセンスアイテム"
+    },
+    {
+      "path": "Liquid_Emotions",
+      "name": "リキッドエモーション",
+      "parserType": "standard",
+      "enabled": true,
+      "description": "感情の液体"
+    },
+    {
+      "path": "Splinter",
+      "name": "スプリンター",
+      "parserType": "standard",
+      "enabled": true,
+      "description": "スプリンターアイテム"
+    },
+    {
+      "path": "Catalysts",
+      "name": "カタリスト",
+      "parserType": "standard",
+      "enabled": true,
+      "description": "カタリストアイテム"
+    },
+    {
+      "path": "Unique_item",
+      "name": "ユニークアイテム",
+      "parserType": "unique",
+      "enabled": true,
+      "description": "ユニーク武器、防具、その他"
+    },
+    {
+      "path": "Trial_of_the_Sekhemas",
+      "name": "セケマの試練",
+      "parserType": "trial",
+      "enabled": true,
+      "description": "セケマの試練関連アイテム"
+    },
+    {
+      "path": "The_Trial_of_Chaos",
+      "name": "カオスの試練",
+      "parserType": "trial",
+      "enabled": true,
+      "description": "カオスの試練関連アイテム"
+    },
+    {
+      "path": "The_Burning_Monolith",
+      "name": "バーニングモノリス",
+      "parserType": "monolith",
+      "enabled": true,
+      "description": "バーニングモノリスとピナクルキーアイテム"
+    },
+    {
+      "path": "Skill_Gems",
+      "name": "スキルジェム",
+      "parserType": "gem",
+      "enabled": true,
+      "description": "スキルジェム"
+    },
+    {
+      "path": "Support_Gems",
+      "name": "サポートジェム",
+      "parserType": "gem",
+      "enabled": true,
+      "description": "サポートジェム"
+    },
+    {
+      "path": "Waystones",
+      "name": "ウェイストーン",
+      "parserType": "waystone",
+      "enabled": true,
+      "description": "ウェイストーンとエンドゲームマップ"
+    }
+  ],
+  "parserTypes": {
+    "standard": {
+      "description": "標準パーサー（item_currencyクラス）",
+      "selectors": ["a.item_currency"],
+      "extractionStrategy": "linkText"
+    },
+    "augment": {
+      "description": "オーグメント専用パーサー（複数のセレクタ対応）",
+      "selectors": [
+        "a.item_currency",
+        "table.itemDataTable a[href^='/jp/']",
+        "a.whiteitem"
+      ],
+      "extractionStrategy": "linkTextOrTableCell"
+    },
+    "omen": {
+      "description": "オーメン専用パーサー",
+      "selectors": ["a.whiteitem.Omen"],
+      "extractionStrategy": "linkText"
+    },
+    "unique": {
+      "description": "ユニークアイテム専用パーサー",
+      "selectors": ["a.uniqueitem"],
+      "extractionStrategy": "uniqueNameSpan"
+    },
+    "trial": {
+      "description": "試練関連パーサー",
+      "selectors": [
+        "a.item_currency",
+        "a.whiteitem",
+        "table a[href^='/jp/']"
+      ],
+      "extractionStrategy": "linkTextOrTableCell"
+    },
+    "monolith": {
+      "description": "モノリス/ピナクルキー専用パーサー",
+      "selectors": [
+        "a.item_currency",
+        "a.whiteitem",
+        "a.uniqueitem",
+        "table a[href^='/jp/']"
+      ],
+      "extractionStrategy": "flexible"
+    },
+    "gem": {
+      "description": "ジェム専用パーサー（スキル/サポート）",
+      "selectors": [
+        "table a[href^='/jp/']",
+        "a.gemitem",
+        "td a[href*='Gem']"
+      ],
+      "extractionStrategy": "linkTextOrTableCell"
+    },
+    "waystone": {
+      "description": "ウェイストーン/マップ専用パーサー",
+      "selectors": [
+        "table a[href^='/jp/']",
+        "a.item_currency",
+        "td a"
+      ],
+      "extractionStrategy": "linkTextOrTableCell"
+    }
+  }
+}
