@@ -28,4 +28,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ホットキー押下イベントを受信
   onHotkeyPressed: (callback) => ipcRenderer.on("hotkey-pressed", callback),
+
+  // アップデート関連
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates-manual"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  onUpdateDownloadStarted: (callback) =>
+    ipcRenderer.on("update-download-started", callback),
+  onUpdateDownloadProgress: (callback) =>
+    ipcRenderer.on("update-download-progress", (event, data) =>
+      callback(data)
+    ),
 });

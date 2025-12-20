@@ -21,6 +21,11 @@ import {
   getItemInfoByItemId,
   getItemInfoByName,
 } from "./handlers/itemMapHandler.js";
+import {
+  setupAutoUpdater,
+  checkForUpdates,
+  checkForUpdatesManually,
+} from "./utils/autoUpdater.js";
 
 // ESModulesでは__dirnameが使えないので定義
 const __filename = fileURLToPath(import.meta.url);
@@ -283,6 +288,13 @@ app.whenReady().then(() => {
   createWindow();
   createTray(); // システムトレイを作成
 
+  // アップデート機能のセットアップ（起動から5秒後）
+  setTimeout(() => {
+    console.log("[AutoUpdater] Initializing auto-update check...");
+    setupAutoUpdater(mainWindow);
+    checkForUpdates();
+  }, 5000);
+
   // IPCハンドラー: アイテム履歴を取得
   ipcMain.handle("get-item-history", async (event, itemId, options = {}) => {
     try {
@@ -368,6 +380,22 @@ app.whenReady().then(() => {
       console.log("[Window] Hidden via IPC");
     }
     return { success: true };
+  });
+
+  // IPCハンドラー: 手動アップデートチェック
+  ipcMain.handle("check-for-updates-manual", async () => {
+    try {
+      const result = await checkForUpdatesManually();
+      return result;
+    } catch (error) {
+      console.error("[IPC Error] Failed to check for updates:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPCハンドラー: 現在のバージョンを取得
+  ipcMain.handle("get-app-version", async () => {
+    return { success: true, version: app.getVersion() };
   });
 
   // グローバルホットキーを登録
